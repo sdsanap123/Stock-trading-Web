@@ -1,0 +1,17 @@
+{
+    "email_enabled": true,
+    "target_hit_alerts": true,
+    "stop_loss_alerts": true,
+    "significant_movement_alerts": true,
+    "daily_summary": true,
+    "risk_alerts": true,
+    "swing_plan_updates": true,
+    "significant_movement_threshold": 5.0,
+    "daily_summary_time": "18:00",
+    "max_alerts_per_hour": 10,
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587,
+    "sender_email": "",
+    "sender_password": "",
+    "recipient_email": ""
+}

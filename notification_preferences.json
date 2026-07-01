@@ -1,0 +1,54 @@
+{
+    "notifications_enabled": true,
+    "quiet_hours_start": "22:00",
+    "quiet_hours_end": "08:00",
+    "timezone": "Asia/Kolkata",
+    "target_hit_alerts": true,
+    "stop_loss_alerts": true,
+    "significant_movement_alerts": true,
+    "daily_summary": true,
+    "risk_alerts": true,
+    "swing_plan_updates": true,
+    "news_alerts": false,
+    "email_settings": {
+        "enabled": true,
+        "priority": "high",
+        "frequency": "immediate",
+        "custom_settings": {}
+    },
+    "browser_settings": {
+        "enabled": true,
+        "priority": "medium",
+        "frequency": "immediate",
+        "custom_settings": {}
+    },
+    "sms_settings": {
+        "enabled": false,
+        "priority": "critical",
+        "frequency": "immediate",
+        "custom_settings": {}
+    },
+    "telegram_settings": {
+        "enabled": false,
+        "priority": "medium",
+        "frequency": "immediate",
+        "custom_settings": {}
+    },
+    "discord_settings": {
+        "enabled": false,
+        "priority": "low",
+        "frequency": "immediate",
+        "custom_settings": {}
+    },
+    "thresholds": {
+        "significant_movement_percent": 5.0,
+        "target_hit_tolerance": 0.5,
+        "stop_loss_tolerance": 0.5,
+        "risk_alert_threshold": 10.0,
+        "max_alerts_per_hour": 10,
+        "max_alerts_per_day": 50
+    },
+    "portfolio_alerts": true,
+    "watchlist_alerts": true,
+    "swing_trading_alerts": true
+}

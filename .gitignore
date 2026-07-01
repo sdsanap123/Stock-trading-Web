@@ -1,0 +1,50 @@
+# Environment variables
+.env
+.env.local
+.env.production
+
+# API Keys and secrets
+secrets.toml
+config.json
+firebase-credentials.json
+*.api_key.txt
+.groq_api_key.txt
+.gemini_api_key.txt
+
+# Cache directories
+cache/
+__pycache__/
+saved_data/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Streamlit
+.streamlit/secrets.toml
+/saved_data/
+saved_data/watchlist.json
