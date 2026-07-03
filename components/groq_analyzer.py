@@ -143,8 +143,7 @@ Focus ONLY on NSE-listed Indian stocks from major sectors:
 
 CRITICAL: Only use valid NSE stock symbols. Do NOT use:
 - US stock symbols (like SCHW, CM, MAN)
-- Delisted stocks
-- Invalid symbols
+- Delisted or invalid symbols (like IIFLFIN, BAZAR, BAZAAR)
 - Symbols with suffixes (.NS, .BO, etc.)
 
 Government-Sensitive Stocks for Swing Trading:
@@ -167,11 +166,9 @@ Provide analysis for the most impactful news affecting NSE-listed Indian stocks 
             
             # Use the same model fallback approach (matching original app)
             models_to_try = [
-                "meta-llama/llama-4-scout-17b-16e-instruct", # Modern 2026 Llama 4 model
-                "openai/gpt-oss-20b",                        # Flagship open source fast model
-                "openai/gpt-oss-120b",                       # Flagship open source large model
-                "llama-3.3-70b-versatile",                   # Fallback if still active
-                "llama-3.1-8b-instant"                       # Fallback if still active
+                "openai/gpt-oss-120b",                       # Flagship open source large model (active)
+                "qwen/qwen3.6-27b",                          # Highly capable reasoning alternative (active)
+                "openai/gpt-oss-20b"                         # Flagship open source fast model (active)
             ]
             
             # Try up to 3 times with different models
@@ -207,7 +204,7 @@ Provide analysis for the most impactful news affecting NSE-listed Indian stocks 
                                 clean_symbol = symbol.split('.')[0].upper() if symbol else 'UNKNOWN'
                                 
                                 # Skip invalid symbols
-                                if clean_symbol in ['UNKNOWN', 'SCHW', 'CM', 'MAN'] or len(clean_symbol) < 2:
+                                if clean_symbol in ['UNKNOWN', 'SCHW', 'CM', 'MAN', 'IIFLFIN', 'BAZAR', 'BAZAAR'] or len(clean_symbol) < 2:
                                     logger.warning(f"Skipping invalid stock symbol: {symbol}")
                                     continue
                                 
@@ -316,6 +313,7 @@ STRICTLY IGNORE — Do NOT include any news/stock that is:
 - Any content framed as "X says buy", "experts recommend", "analysts expect", "brokerage initiates coverage"
 - Macro-economic fluff, general index movement commentary, or vague market sentiment pieces
 - General market commentary or routine/vague sector outlooks without specific company impact
+- US, delisted, or invalid stock symbols (like SCHW, CM, MAN, IIFLFIN, BAZAR, BAZAAR)
 
 Focus on NSE equity stocks from major sectors:
 - Banking & Financial Services (HDFCBANK, ICICIBANK, SBIN, KOTAKBANK, AXISBANK, etc.)
@@ -331,11 +329,9 @@ Provide analysis for the most impactful news affecting NSE-listed Indian stocks 
 
             # Try different models in order of preference (matching original app)
             models_to_try = [
-                "meta-llama/llama-4-scout-17b-16e-instruct", # Modern 2026 Llama 4 model
-                "openai/gpt-oss-20b",                        # Flagship open source fast model
-                "openai/gpt-oss-120b",                       # Flagship open source large model
-                "llama-3.3-70b-versatile",                   # Fallback if still active
-                "llama-3.1-8b-instant"                       # Fallback if still active
+                "openai/gpt-oss-120b",                       # Flagship open source large model (active)
+                "qwen/qwen3.6-27b",                          # Highly capable reasoning alternative (active)
+                "openai/gpt-oss-20b"                         # Flagship open source fast model (active)
             ]
             
             # Try the request with fallback models
@@ -363,8 +359,14 @@ Provide analysis for the most impactful news affecting NSE-listed Indian stocks 
                     
                     for stock in stocks_list:
                         if isinstance(stock, dict):
+                            symbol = stock.get('symbol', 'UNKNOWN')
+                            clean_symbol = symbol.split('.')[0].upper() if symbol else 'UNKNOWN'
+                            if clean_symbol in ['UNKNOWN', 'SCHW', 'CM', 'MAN', 'IIFLFIN', 'BAZAR', 'BAZAAR'] or len(clean_symbol) < 2:
+                                logger.warning(f"Skipping invalid stock symbol: {symbol}")
+                                continue
+                                
                             formatted_news.append({
-                                'symbol': stock.get('symbol', 'UNKNOWN'),
+                                'symbol': clean_symbol,
                                 'company_name': stock.get('company_name', 'Unknown Company'),
                                 'news_summary': stock.get('news_summary', 'No summary available'),
                                 'sentiment_score': float(stock.get('sentiment_score', 0)),
@@ -463,11 +465,9 @@ Provide only valid JSON response."""
             
             # Use the same model fallback approach (matching original app)
             models_to_try = [
-                "meta-llama/llama-4-scout-17b-16e-instruct", # Modern 2026 Llama 4 model
-                "openai/gpt-oss-20b",                        # Flagship open source fast model
-                "openai/gpt-oss-120b",                       # Flagship open source large model
-                "llama-3.3-70b-versatile",                   # Fallback if still active
-                "llama-3.1-8b-instant"                       # Fallback if still active
+                "openai/gpt-oss-120b",                       # Flagship open source large model (active)
+                "qwen/qwen3.6-27b",                          # Highly capable reasoning alternative (active)
+                "openai/gpt-oss-20b"                         # Flagship open source fast model (active)
             ]
             
             result_dict = self._try_models_request(models_to_try, headers, prompt, timeout=30)
@@ -583,11 +583,9 @@ STRICTLY IGNORE and assign a neutral/zero sentiment score if the article is:
             
             # Use the same model fallback approach (matching original app)
             models_to_try = [
-                "meta-llama/llama-4-scout-17b-16e-instruct", # Modern 2026 Llama 4 model
-                "openai/gpt-oss-20b",                        # Flagship open source fast model
-                "openai/gpt-oss-120b",                       # Flagship open source large model
-                "llama-3.3-70b-versatile",                   # Fallback if still active
-                "llama-3.1-8b-instant"                       # Fallback if still active
+                "openai/gpt-oss-120b",                       # Flagship open source large model (active)
+                "qwen/qwen3.6-27b",                          # Highly capable reasoning alternative (active)
+                "openai/gpt-oss-20b"                         # Flagship open source fast model (active)
             ]
             
             result_dict = self._try_models_request(models_to_try, headers, prompt, timeout=15)

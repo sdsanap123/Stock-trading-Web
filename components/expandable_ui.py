@@ -579,7 +579,15 @@ class ExpandableUI:
             col1, col2, col3, col4, col5, col6, col7 = st.columns([1.5, 1, 1, 1, 1, 0.8, 0.8])
             
             with col1:
-                st.write(f"**{symbol}**")
+                badge_color = '#28a745' if recommendation == 'BUY' else '#dc3545' if recommendation == 'SELL' else '#ffc107'
+                badge_label = '📈 BUY' if recommendation == 'BUY' else '📉 SELL' if recommendation == 'SELL' else '➡️ HOLD'
+                st.markdown(
+                    f'<div style="font-weight:bold; font-size:0.95rem;">{symbol}</div>'
+                    f'<div style="display:inline-block; background:{badge_color}; color:#fff; '
+                    f'border-radius:4px; padding:1px 7px; font-size:0.75rem; margin-top:2px;">'
+                    f'{badge_label}</div>',
+                    unsafe_allow_html=True
+                )
                 if company_name:
                     st.caption(company_name)
             

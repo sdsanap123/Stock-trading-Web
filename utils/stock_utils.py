@@ -18,49 +18,114 @@ equity_df = None
 @lru_cache(maxsize=100)
 def search_symbol_online(company_name: str) -> Optional[Dict[str, str]]:
     """
-    Search for stock symbol online using Yahoo Finance API.
-    
+    Search for a stock symbol online.
+    Strategy:
+      1. Yahoo Finance JSON API  (name -> NSE ticker, fastest)
+      2. Google Finance validation (confirm the ticker is live on NSE)
+      3. yfinance library         (last resort)
+
     Args:
-        company_name: The name of the company to search for
-        
+        company_name: Company name or partial NSE ticker to search for
+
     Returns:
-        Dict containing symbol and company name if found, None otherwise
+        Dict with 'symbol' (bare NSE ticker) and 'name', or None if not found
+    """
+    # 1. Yahoo Finance: name -> candidate symbol
+    result = _search_yahoo_finance(company_name)
+    if result:
+        # 2. Google Finance: validate the candidate is live on NSE
+        if validate_symbol_google_finance(result['symbol']):
+            logger.info(f"Google Finance confirmed NSE:{result['symbol']}")
+            return result
+        else:
+            # Symbol came back from Yahoo but Google Finance says it's not live
+            # Still return it — Yahoo is generally reliable; GF validation is best-effort
+            logger.debug(f"Google Finance could not confirm {result['symbol']}, using Yahoo result anyway")
+            return result
+
+    # 3. yfinance library last-resort fallback
+    try:
+        search_results = yf.Tickers(company_name)
+        if search_results.symbols:
+            ticker = yf.Ticker(search_results.symbols[0])
+            info = ticker.info
+            if info and 'symbol' in info:
+                return {
+                    'symbol': info['symbol'].split('.')[0],
+                    'name': info.get('shortName', company_name)
+                }
+    except Exception as e:
+        logger.debug(f"yfinance fallback failed: {str(e)}")
+
+    return None
+
+
+def validate_symbol_google_finance(symbol: str) -> bool:
+    """
+    Validate that a bare NSE ticker (e.g. 'RELIANCE') is live on Google Finance
+    by requesting https://www.google.com/finance/quote/SYMBOL:NSE.
+
+    Returns True if Google Finance returns a 200 for that symbol, False otherwise.
+    This is the only reliable way to use Google Finance programmatically since
+    the /finance/search endpoint does not exist.
     """
     try:
-        # First try yfinance's search
-        try:
-            search_results = yf.Tickers(company_name)
-            if search_results.symbols:
-                ticker = yf.Ticker(search_results.symbols[0])
-                info = ticker.info
-                if info and 'symbol' in info:
-                    return {
-                        'symbol': info['symbol'].split('.')[0],  # Remove exchange suffix if any
-                        'name': info.get('shortName', company_name)
-                    }
-        except Exception as e:
-            logger.debug(f"yfinance search failed, trying direct API: {str(e)}")
-        
-        # Fallback to Yahoo Finance API
-        url = f"https://query1.finance.yahoo.com/v1/finance/search?q={company_name}&quotesCount=5&newsCount=0"
+        import urllib.parse
+        ticker = urllib.parse.quote(symbol.upper().split('.')[0])
+        url = f"https://www.google.com/finance/quote/{ticker}:NSE"
+        headers = {
+            'User-Agent': (
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                'AppleWebKit/537.36 (KHTML, like Gecko) '
+                'Chrome/124.0.0.0 Safari/537.36'
+            ),
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+        response = requests.get(url, headers=headers, timeout=8, allow_redirects=True)
+        is_valid = response.status_code == 200
+        logger.debug(f"Google Finance validation {symbol}:NSE -> {'VALID' if is_valid else 'INVALID'}")
+        return is_valid
+    except Exception as e:
+        logger.debug(f"Google Finance validation error for {symbol}: {str(e)}")
+        return False  # Treat errors as non-blocking
+
+
+def _search_yahoo_finance(query: str) -> Optional[Dict[str, str]]:
+    """
+    Query the Yahoo Finance JSON search API.
+    Returns the first NSE-listed result; falls back to the first result overall.
+    """
+    try:
+        import urllib.parse
+
+        encoded = urllib.parse.quote(query)
+        url = (
+            f"https://query1.finance.yahoo.com/v1/finance/search"
+            f"?q={encoded}&quotesCount=10&newsCount=0&listsCount=0"
+        )
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-        
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
-        
-        if 'quotes' in data and data['quotes']:
-            return {
-                'symbol': data['quotes'][0]['symbol'].split('.')[0],  # Remove exchange suffix
-                'name': data['quotes'][0].get('longname', company_name)
-            }
-            
-        return None
-        
+
+        quotes = data.get('quotes', [])
+        if not quotes:
+            return None
+
+        # Prefer NSE (.NS) results for Indian stocks
+        nse_quotes = [q for q in quotes if str(q.get('symbol', '')).endswith('.NS')]
+        chosen = nse_quotes[0] if nse_quotes else quotes[0]
+
+        bare_symbol = str(chosen.get('symbol', '')).split('.')[0].upper()
+        name = chosen.get('longname') or chosen.get('shortname') or query
+
+        logger.info(f"Yahoo Finance resolved '{query}' -> {bare_symbol}")
+        return {'symbol': bare_symbol, 'name': name}
+
     except Exception as e:
-        logger.warning(f"Error searching for symbol online: {str(e)}")
+        logger.debug(f"Yahoo Finance search error: {str(e)}")
         return None
 
 def load_equity_data() -> pd.DataFrame:

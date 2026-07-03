@@ -1321,34 +1321,43 @@ class StreamlitTradingApp:
         
         # Display recommendations
         if st.session_state.recommendations:
-            st.subheader(f"🎯 BUY Recommendations ({len(st.session_state.recommendations)} stocks)")
-            
+            recs      = st.session_state.recommendations
+            buy_recs  = [r for r in recs if r.get('recommendation') == 'BUY']
+            sell_recs = [r for r in recs if r.get('recommendation') == 'SELL']
+
+            st.subheader(
+                f"🎯 Signals: 📈 {len(buy_recs)} BUY  |  📉 {len(sell_recs)} SELL"
+            )
+
             # Summary metrics
             col1, col2, col3, col4 = st.columns(4)
-            
             with col1:
-                st.metric("Total BUY", len(st.session_state.recommendations))
-            
+                st.metric("📈 BUY Signals", len(buy_recs))
             with col2:
-                avg_confidence = sum(r.get('confidence', 0) for r in st.session_state.recommendations) / len(st.session_state.recommendations)
-                st.metric("Avg Confidence", f"{avg_confidence:.1f}%")
-            
+                st.metric("📉 SELL Signals", len(sell_recs))
             with col3:
-                high_confidence = len([r for r in st.session_state.recommendations if r.get('confidence', 0) >= 80])
-                st.metric("High Confidence", high_confidence)
-            
+                avg_conf = sum(r.get('confidence', 0) for r in recs) / max(len(recs), 1)
+                st.metric("Avg Confidence", f"{avg_conf:.1f}%")
             with col4:
                 st.metric("Actions", "View Saved")
                 if st.button("📊 View Saved", key="view_saved_recs"):
                     st.session_state.show_saved_recommendations = not st.session_state.get('show_saved_recommendations', False)
+
+            # Signal-type filter
+            signal_filter = st.radio(
+                "Show signals:",
+                ["All", "📈 BUY only", "📉 SELL only"],
+                horizontal=True,
+                key="signal_type_filter"
+            )
             
             # Show saved recommendations if toggled
             if st.session_state.get('show_saved_recommendations', False):
                 self.display_saved_recommendations()
                 return
-            
+
             st.markdown("---")
-            
+
             # Header row with consistent alignment and tooltips
             col1, col2, col3, col4, col5, col6, col7 = st.columns([1.5, 1, 1, 1, 1, 0.8, 0.8])
             with col1:
@@ -1365,16 +1374,23 @@ class StreamlitTradingApp:
                 st.markdown("**Details**")
             with col7:
                 st.markdown("**Actions**")
-            
+
             st.markdown("<hr style='margin: 0.5rem 0;'/>", unsafe_allow_html=True)
-            
-            # Sort recommendations by confidence in descending order
+
+            # Apply filter then sort by confidence descending
+            if signal_filter == "📈 BUY only":
+                filtered_recs = buy_recs
+            elif signal_filter == "📉 SELL only":
+                filtered_recs = sell_recs
+            else:
+                filtered_recs = recs
+
             sorted_recommendations = sorted(
-                st.session_state.recommendations,
+                filtered_recs,
                 key=lambda x: x.get('confidence', 0),
                 reverse=True
             )
-            
+
             # Display recommendations in rows (sorted by confidence)
             for i, rec in enumerate(sorted_recommendations):
                 ExpandableUI.display_recommendation_row(rec, i)
@@ -1385,48 +1401,79 @@ class StreamlitTradingApp:
                     st.session_state[f"add_to_watchlist_{i}"] = False
                     st.rerun()
         else:
-            st.info("No BUY recommendations available. Click 'Generate BUY Recommendations' to get started.")
+            st.info("No BUY or SELL signals yet. Click 'Generate Recommendations' to get started.")
     
     def display_recommendation_card(self, rec: Dict, index: int):
-        """Display a recommendation card."""
-        symbol = rec.get('symbol', 'N/A')
-        recommendation = rec.get('recommendation', 'HOLD')
-        confidence = rec.get('confidence', 0)
-        current_price = rec.get('current_price', 0)
-        target_price = rec.get('target_price', 0)
-        stop_loss = rec.get('stop_loss', 0)
-        reasoning = rec.get('reasoning', 'No reasoning provided')
-        
-        # Recommendation color
-        rec_class = f"recommendation-{recommendation.lower()}"
-        rec_emoji = "📈" if recommendation == "BUY" else "📉" if recommendation == "SELL" else "➡️"
-        
-        # Create card
+        """Display a recommendation card with colour-coded styling for BUY / SELL / HOLD."""
+        symbol          = rec.get('symbol', 'N/A')
+        recommendation  = rec.get('recommendation', 'HOLD')
+        confidence      = rec.get('confidence', 0)
+        current_price   = rec.get('current_price', 0)
+        target_price    = rec.get('target_price', 0)
+        stop_loss       = rec.get('stop_loss', 0)
+        reasoning       = rec.get('reasoning', 'No reasoning provided')
+        swing_plan      = rec.get('swing_plan', {})
+
+        # Visual cues per signal type
+        if recommendation == 'BUY':
+            rec_emoji   = '📈'
+            border_col  = '#28a745'
+            label_col   = '#28a745'
+            direction   = 'LONG'
+        elif recommendation == 'SELL':
+            rec_emoji   = '📉'
+            border_col  = '#dc3545'
+            label_col   = '#dc3545'
+            direction   = 'SHORT'
+        else:
+            rec_emoji   = '➡️'
+            border_col  = '#ffc107'
+            label_col   = '#ffc107'
+            direction   = 'HOLD'
+
         with st.container():
             col1, col2, col3 = st.columns([2, 1, 1])
-            
+
             with col1:
+                if recommendation == 'SELL':
+                    price_row = (
+                        f"<strong>Entry (Short):</strong> ₹{current_price:.2f} | "
+                        f"<strong>Target:</strong> ₹{target_price:.2f} | "
+                        f"<strong>Stop (Cover):</strong> ₹{stop_loss:.2f}"
+                    )
+                elif recommendation == 'BUY':
+                    price_row = (
+                        f"<strong>Current:</strong> ₹{current_price:.2f} | "
+                        f"<strong>Target:</strong> ₹{target_price:.2f} | "
+                        f"<strong>Stop Loss:</strong> ₹{stop_loss:.2f}"
+                    )
+                else:
+                    price_row = f"<strong>Current:</strong> ₹{current_price:.2f} &nbsp;|&nbsp; No active trade targets"
+
                 st.markdown(f"""
-                <div class="metric-card">
-                    <h3>{rec_emoji} {symbol}</h3>
-                    <p><span class="{rec_class}">{recommendation}</span> 
-                    (Confidence: {confidence:.1f}%)</p>
-                    <p><strong>Current:</strong> ₹{current_price:.2f} | 
-                    <strong>Target:</strong> ₹{target_price:.2f} | 
-                    <strong>Stop Loss:</strong> ₹{stop_loss:.2f}</p>
+                <div style="background:#1e1e1e; padding:0.8rem; border-radius:0.5rem;
+                            border-left:4px solid {border_col}; margin-bottom:0.4rem;">
+                    <h3 style="margin:0; color:#f0f0f0;">{rec_emoji} {symbol}</h3>
+                    <p style="margin:0.3rem 0;">
+                        <span style="color:{label_col}; font-weight:bold; font-size:1.1rem;">
+                            {recommendation} ({direction})
+                        </span>
+                        &nbsp;&mdash;&nbsp;Confidence: <strong>{confidence:.1f}%</strong>
+                    </p>
+                    <p style="margin:0; color:#cccccc; font-size:0.9rem;">{price_row}</p>
                 </div>
                 """, unsafe_allow_html=True)
-            
+
             with col2:
-                if st.button(f"📊 Details", key=f"details_{index}"):
+                if st.button('📊 Details', key=f'details_{index}'):
                     self.show_recommendation_details(rec)
-            
+
             with col3:
-                if st.button(f"👀 Add to Watchlist", key=f"watchlist_{index}"):
+                if st.button('👀 Add to Watchlist', key=f'watchlist_{index}'):
                     self.add_to_watchlist(rec)
-            
+
             # Reasoning
-            with st.expander(f"💭 Reasoning for {symbol}"):
+            with st.expander(f'💭 Reasoning for {symbol}'):
                 st.markdown(reasoning)
             
             st.markdown("---")
@@ -2422,40 +2469,53 @@ class StreamlitTradingApp:
                             }
                             cache_manager.cache_stock_analysis(symbol, analysis_data)
                         
-                        # Only include BUY recommendations (SKIP others)
-                        if recommendation.get('action') == 'BUY':
-                            # Generate swing trading plan
-                            swing_strategy = st.session_state.swing_strategy
+                        # Include BUY and SELL recommendations; skip HOLD (no clear edge)
+                        action = recommendation.get('action', '')
+                        if action in ('BUY', 'SELL'):
                             # Get company name from groq analysis or use symbol as fallback
                             company_name = ''
                             if groq_analysis and groq_analysis.get('status') == 'success':
                                 company_name = groq_analysis.get('company_name', '')
-                            
-                            swing_plan = swing_strategy.generate_swing_trading_plan({
-                                'symbol': symbol,
-                                'company_name': company_name,
-                                'current_price': technical_data.get('current_price', 0),
-                                'confidence': recommendation['confidence'],
-                                'target_price': recommendation['target_price'],
-                                'stop_loss': recommendation['stop_loss'],
-                                'technical_data': technical_data,
-                                'groq_analysis': groq_analysis
-                            })
-                            
-                            # Validate swing opportunity
-                            validation = swing_strategy.validate_swing_opportunity({
-                                'symbol': symbol,
-                                'current_price': technical_data.get('current_price', 0),
-                                'confidence': recommendation['confidence'],
-                                'technical_data': technical_data,
-                                'groq_analysis': groq_analysis
-                            })
-                            
-                            # Create recommendation data with swing trading plan
+
+                            if action == 'BUY':
+                                # Generate standard swing trading plan for long positions
+                                swing_strategy = st.session_state.swing_strategy
+                                swing_plan = swing_strategy.generate_swing_trading_plan({
+                                    'symbol': symbol,
+                                    'company_name': company_name,
+                                    'current_price': technical_data.get('current_price', 0),
+                                    'confidence': recommendation['confidence'],
+                                    'target_price': recommendation['target_price'],
+                                    'stop_loss': recommendation['stop_loss'],
+                                    'technical_data': technical_data,
+                                    'groq_analysis': groq_analysis
+                                })
+                                validation = swing_strategy.validate_swing_opportunity({
+                                    'symbol': symbol,
+                                    'current_price': technical_data.get('current_price', 0),
+                                    'confidence': recommendation['confidence'],
+                                    'technical_data': technical_data,
+                                    'groq_analysis': groq_analysis
+                                })
+                            else:  # SELL
+                                # For SELL signals, swing plan targets the downside
+                                swing_plan = {
+                                    'direction': 'SHORT',
+                                    'entry': technical_data.get('current_price', 0),
+                                    'target': recommendation['target_price'],
+                                    'stop_loss': recommendation['stop_loss'],
+                                    'risk_reward': round(
+                                        (technical_data.get('current_price', 0) - recommendation['target_price']) /
+                                        max(recommendation['stop_loss'] - technical_data.get('current_price', 0), 0.01),
+                                        2
+                                    )
+                                }
+                                validation = {'valid': True, 'reason': 'Bearish signal confirmed by AI engine'}
+
                             rec_data = {
                                 'symbol': symbol,
                                 'current_price': technical_data.get('current_price', 0),
-                                'recommendation': recommendation['action'],
+                                'recommendation': action,
                                 'confidence': recommendation['confidence'],
                                 'target_price': recommendation['target_price'],
                                 'stop_loss': recommendation['stop_loss'],
@@ -2467,11 +2527,10 @@ class StreamlitTradingApp:
                                 'swing_plan': swing_plan,
                                 'swing_validation': validation
                             }
-                            
                             news_recommendations.append(rec_data)
-                            logger.info(f"Added BUY recommendation with swing plan for {symbol}")
+                            logger.info(f"Added {action} recommendation for {symbol}")
                         else:
-                            logger.info(f"Skipped {symbol} - not a BUY recommendation")
+                            logger.info(f"Skipped {symbol} - HOLD signal (no directional edge)")
                         
                         # Update progress
                         progress_bar.progress((i + 1) / total_stocks)
@@ -2492,7 +2551,9 @@ class StreamlitTradingApp:
                 self._auto_save_buy_recommendations()  # Specifically save BUY recommendations date-wise
                 self._auto_save_swing_strategies()
                 
-                st.success(f"✅ Analysis complete! Generated {len(news_recommendations)} BUY recommendations. Data auto-saved for 7 days.")
+                buy_count  = sum(1 for r in news_recommendations if r.get('recommendation') == 'BUY')
+                sell_count = sum(1 for r in news_recommendations if r.get('recommendation') == 'SELL')
+                st.success(f"✅ Analysis complete! {buy_count} BUY 📈 + {sell_count} SELL 📉 signals generated. Data auto-saved for 7 days.")
                 
         except Exception as e:
             st.error(f"❌ Error analyzing market: {str(e)}")

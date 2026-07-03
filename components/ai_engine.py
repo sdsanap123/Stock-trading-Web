@@ -269,25 +269,34 @@ class AIRecommendationEngine:
             # Ensure AI score is between 0 and 1
             ai_score = max(0, min(1, ai_score))
             
-            # Determine recommendation based on AI score - More lenient for BUY recommendations
-            # Modified to show only BUY recommendations with more lenient criteria
-            if ai_score >= 0.35:  # Lowered threshold from 0.7 to 0.35 for more BUY recommendations
+            # Determine recommendation based on AI score
+            if ai_score >= 0.55:       # Strong bullish signal
                 action = 'BUY'
                 confidence = min(95, ai_score * 100)
-            else:
-                # Skip stocks that don't meet BUY criteria - don't show HOLD or SELL
-                action = 'SKIP'
-                confidence = 0
-            
-            # Calculate target price and stop loss for BUY recommendations only
+            elif ai_score >= 0.35:     # Neutral / wait
+                action = 'HOLD'
+                confidence = min(70, ai_score * 80)
+            else:                      # Bearish signal
+                action = 'SELL'
+                confidence = min(95, (1 - ai_score) * 100)
+
+            # Calculate target price and stop loss
             current_price = technical_analysis.get('current_price', 0)
-            if current_price > 0 and action == 'BUY':
-                # 7-day swing strategy: More aggressive targets for short-term gains
-                target_price = current_price * (1 + (ai_score - 0.35) * 0.3)  # 0-30% upside based on score
-                stop_loss = current_price * (1 - 0.08)  # 8% stop loss for swing trading
+            if current_price > 0:
+                if action == 'BUY':
+                    # 7-day swing: target upside scaled to score, 8% stop loss
+                    target_price = current_price * (1 + (ai_score - 0.55) * 0.35)
+                    stop_loss    = current_price * 0.92
+                elif action == 'SELL':
+                    # Short / exit target: scaled downside, 6% stop above entry
+                    target_price = current_price * (1 - (0.35 - ai_score) * 0.40)
+                    stop_loss    = current_price * 1.06
+                else:  # HOLD
+                    target_price = 0
+                    stop_loss    = 0
             else:
                 target_price = 0
-                stop_loss = 0
+                stop_loss    = 0
             
             # Generate comprehensive reasoning
             reasoning = self._generate_reasoning(
@@ -462,13 +471,19 @@ class AIRecommendationEngine:
                 reasoning_parts.append("• Low confidence recommendation")
             
             if action == 'BUY':
-                reasoning_parts.append("• 7-Day Swing Strategy: Short-term position with 8% stop loss")
+                reasoning_parts.append("• 7-Day Swing Strategy: Short-term LONG position with 8% stop loss")
                 reasoning_parts.append("• Consider position sizing based on risk tolerance")
                 reasoning_parts.append("• Monitor daily for exit signals or target achievement")
                 reasoning_parts.append("• Set stop loss to limit downside risk")
-            else:
-                reasoning_parts.append("• Stock does not meet BUY criteria for swing trading")
-                reasoning_parts.append("• Skipped from recommendations")
+            elif action == 'SELL':
+                reasoning_parts.append("• Bearish signal: Consider SHORT or EXIT any existing position")
+                reasoning_parts.append("• 6% stop loss above entry to cap upside risk")
+                reasoning_parts.append("• Monitor for reversal signals before acting")
+                reasoning_parts.append("• Confirm with volume and broader market trend")
+            else:  # HOLD
+                reasoning_parts.append("• Neutral signal: No clear directional edge")
+                reasoning_parts.append("• Avoid initiating new positions until bias clarifies")
+                reasoning_parts.append("• Watch for BUY or SELL trigger conditions")
             
             return "\n".join(reasoning_parts)
             
