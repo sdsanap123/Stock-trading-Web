@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import time
+from datetime import datetime
 import requests
 from typing import Optional, Dict, Any, List, Tuple
 import yfinance as yf
@@ -128,9 +129,67 @@ def _search_yahoo_finance(query: str) -> Optional[Dict[str, str]]:
         logger.debug(f"Yahoo Finance search error: {str(e)}")
         return None
 
+def download_nse_equity_list(file_path: str) -> bool:
+    """Download the EQUITY_L.csv file from NSE archives."""
+    url = "https://archives.nseindia.com/content/equities/EQUITY_L.csv"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+        "Accept": "*/*"
+    }
+    try:
+        logger.info(f"Downloading latest NSE equity list from {url}...")
+        response = requests.get(url, headers=headers, timeout=15)
+        if response.status_code == 200:
+            # Ensure target directory exists
+            os.makedirs(os.path.dirname(os.path.abspath(file_path)), exist_ok=True)
+            with open(file_path, 'wb') as f:
+                f.write(response.content)
+            logger.info(f"Successfully downloaded and saved NSE equity list to {file_path}")
+            return True
+        else:
+            logger.error(f"Failed to download NSE equity list. HTTP Status: {response.status_code}")
+    except Exception as e:
+        logger.error(f"Error downloading NSE equity list: {str(e)}")
+    return False
+
+def check_and_update_nse_file(file_path: str) -> bool:
+    """
+    Check if the local EQUITY_L.csv needs an update.
+    Triggers download if:
+    1. The file does not exist.
+    2. Today is the 1st of the month and the file was not modified today.
+    3. The file's modification month/year is older than the current month/year.
+    """
+    try:
+        if not os.path.exists(file_path):
+            logger.info(f"{file_path} not found. Triggering initial download.")
+            return download_nse_equity_list(file_path)
+            
+        # Get last modification time of the file
+        mtime = os.path.getmtime(file_path)
+        last_modified = datetime.fromtimestamp(mtime)
+        now = datetime.now()
+        
+        # Check if last modified month is different, or if it is the 1st of the month and last modified is not today
+        needs_update = False
+        if last_modified.year < now.year or last_modified.month < now.month:
+            logger.info(f"Local equity file is from a previous month ({last_modified.strftime('%B %Y')}). Updating.")
+            needs_update = True
+        elif now.day == 1 and last_modified.date() < now.date():
+            logger.info("Today is the 1st of the month. Triggering scheduled monthly update of equity list.")
+            needs_update = True
+            
+        if needs_update:
+            return download_nse_equity_list(file_path)
+            
+    except Exception as e:
+        logger.error(f"Error checking/updating NSE equity list: {str(e)}")
+    return False
+
 def load_equity_data() -> pd.DataFrame:
     """
     Load the EQUITY_L.csv file into a pandas DataFrame with caching.
+    Automatically checks and updates the file from NSE archives every month.
     
     Returns:
         pd.DataFrame: DataFrame containing equity data with columns like 'SYMBOL', 'NAME OF COMPANY', etc.
@@ -141,7 +200,7 @@ def load_equity_data() -> pd.DataFrame:
         return equity_df
     
     try:
-        # Try to find EQUITY_L.csv in common locations
+        # Determine the file path
         search_paths = [
             os.path.join(os.path.dirname(os.path.dirname(__file__)), 'EQUITY_L.csv'),
             'EQUITY_L.csv',
@@ -154,9 +213,16 @@ def load_equity_data() -> pd.DataFrame:
             if os.path.exists(path):
                 file_path = path
                 break
-        
+                
+        # If no path exists, default to the standard parent directory location
         if not file_path:
-            logger.error("EQUITY_L.csv not found in any of the searched locations")
+            file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'EQUITY_L.csv')
+            
+        # Perform automatic monthly update check
+        check_and_update_nse_file(file_path)
+        
+        if not os.path.exists(file_path):
+            logger.error("EQUITY_L.csv not found and could not be downloaded")
             return pd.DataFrame(columns=['SYMBOL', 'NAME OF COMPANY'])
         
         # Read the CSV with appropriate encoding
